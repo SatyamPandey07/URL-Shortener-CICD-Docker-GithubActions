@@ -1,12 +1,15 @@
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+
 from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 load_dotenv()
 
 # Allow override for testing (use SQLite in-memory so tests don't need Postgres)
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://shortlink:shortlink@localhost:5432/shortlink")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql://shortlink:shortlink@localhost:5432/shortlink"
+)
 
 # SQLite needs different connect_args
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}

@@ -1,14 +1,15 @@
+import logging
 import os
 import time
-import logging
-from fastapi import FastAPI, Depends, Request, Form, HTTPException
-from fastapi.responses import RedirectResponse, HTMLResponse
-from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import Session
-from pydantic import ValidationError
 
-from app.database import get_db, engine, Base
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
+from sqlalchemy.orm import Session
+
 from app import crud, schemas
+from app.database import Base, engine, get_db
 
 # ---------------------------------------------------------------------------
 # App initialisation & Logging setup
@@ -25,6 +26,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
+
 # Structured request logger middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -37,6 +39,7 @@ async def log_requests(request: Request, call_next):
     )
     return response
 
+
 templates = Jinja2Templates(directory="templates")
 
 BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
@@ -45,6 +48,7 @@ BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
 # ---------------------------------------------------------------------------
 # Health check (used by deployment pipeline health probes)
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health", tags=["ops"])
 def health_check():
@@ -55,6 +59,7 @@ def health_check():
 # ---------------------------------------------------------------------------
 # Homepage
 # ---------------------------------------------------------------------------
+
 
 @app.get("/", response_class=HTMLResponse, tags=["ui"])
 def homepage(request: Request):
@@ -69,6 +74,7 @@ def homepage(request: Request):
 # ---------------------------------------------------------------------------
 # POST /shorten  (handles both API JSON and HTML form submissions)
 # ---------------------------------------------------------------------------
+
 
 @app.post("/shorten", tags=["api"])
 def shorten_url(
@@ -123,6 +129,7 @@ def shorten_url(
 # GET /{code}  — redirect to original URL
 # ---------------------------------------------------------------------------
 
+
 @app.get("/{code}", tags=["redirect"])
 def redirect_to_url(code: str, request: Request, db: Session = Depends(get_db)):
     """Look up the short code and 302-redirect to the original URL.
@@ -146,6 +153,7 @@ def redirect_to_url(code: str, request: Request, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _wants_json(request: Request) -> bool:
     """Return True if the client explicitly requests a JSON response."""

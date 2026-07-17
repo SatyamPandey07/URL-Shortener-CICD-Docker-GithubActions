@@ -22,6 +22,21 @@ ShortLink is the foundation for an 8-PR series that builds a production-grade CI
 
 ---
 
+## User Interface Showcase
+
+Here are the user interface screens demonstrating the core functionality:
+
+### 1. Homepage (Empty Input State)
+![Homepage Empty](assets/homepage_empty.png)
+
+### 2. Homepage (Shortened Success State)
+![Homepage Shortened](assets/homepage_shortened.png)
+
+### 3. Friendly 404 Error Page
+![Not Found 404](assets/notfound_404.png)
+
+---
+
 ## Tech Stack
 
 - **Backend**: Python 3.12 + FastAPI + Uvicorn

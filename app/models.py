@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, DateTime
+
+from sqlalchemy import Column, DateTime, Integer, String
+
 from app.database import Base
 
 
@@ -10,7 +12,9 @@ class Link(Base):
 
     code = Column(String(6), primary_key=True, index=True)
     original_url = Column(String(2048), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
     click_count = Column(Integer, default=0, nullable=False)
 
     def __repr__(self) -> str:

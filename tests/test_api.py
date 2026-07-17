@@ -12,6 +12,7 @@ Covers:
 
 # ── Health check ─────────────────────────────────────────────────────────────
 
+
 def test_health_endpoint(client):
     response = client.get("/health")
     assert response.status_code == 200
@@ -19,6 +20,7 @@ def test_health_endpoint(client):
 
 
 # ── Shortening ────────────────────────────────────────────────────────────────
+
 
 def test_shorten_returns_short_url(client):
     """POST /shorten with a valid URL returns a short_url containing a 6-char code."""
@@ -38,14 +40,19 @@ def test_shorten_returns_short_url(client):
 
 def test_shorten_different_urls_get_different_codes(client):
     """Two different URLs should produce two different short codes."""
-    r1 = client.post("/shorten", data={"url": "https://a.com"}, headers={"accept": "application/json"})
-    r2 = client.post("/shorten", data={"url": "https://b.com"}, headers={"accept": "application/json"})
+    r1 = client.post(
+        "/shorten", data={"url": "https://a.com"}, headers={"accept": "application/json"}
+    )
+    r2 = client.post(
+        "/shorten", data={"url": "https://b.com"}, headers={"accept": "application/json"}
+    )
     assert r1.status_code == 200
     assert r2.status_code == 200
     assert r1.json()["code"] != r2.json()["code"]
 
 
 # ── Redirect ──────────────────────────────────────────────────────────────────
+
 
 def test_redirect_follows_short_code(client):
     """GET /{code} should 302-redirect to the original URL."""
@@ -90,6 +97,7 @@ def test_unknown_code_returns_404(client):
 
 
 # ── Validation ────────────────────────────────────────────────────────────────
+
 
 def test_empty_url_is_rejected(client):
     """POST /shorten with an empty URL should return 422."""

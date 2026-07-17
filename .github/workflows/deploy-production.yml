@@ -31,7 +31,7 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     environment:
       name: production
-      url: ${{ secrets.PRODUCTION_URL || 'https://shortlink-prod.onrender.com' }}
+      url: https://shortlink-prod.onrender.com
 
     steps:
       - name: Trigger Render production deployment
