@@ -1,12 +1,11 @@
 import os
 from fastapi import FastAPI, Depends, Request, Form, HTTPException
-from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from pydantic import ValidationError
 
 from app.database import get_db, engine, Base
-from app.models import Link
 from app import crud, schemas
 
 # ---------------------------------------------------------------------------
