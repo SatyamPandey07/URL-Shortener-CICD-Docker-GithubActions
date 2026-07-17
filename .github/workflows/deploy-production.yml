@@ -1,0 +1,74 @@
+# .github/workflows/deploy-production.yml
+#
+# Automated Production Deployment — Triggers automatically when a new container
+# image is successfully built, scanned, and pushed to GHCR on the main branch.
+#
+# Gate Mechanism:
+#   This job is bound to the 'production' environment. Since a required reviewer
+#   is configured on the production environment in GitHub, GitHub Actions will
+#   pause the workflow run here and wait for manual approval in the Actions UI
+#   before executing the steps.
+
+name: Deploy to Production
+
+on:
+  workflow_run:
+    workflows: ["Publish Production Image"]
+    types:
+      - completed
+    branches:
+      - main
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy and Verify Production
+    runs-on: ubuntu-latest
+    # Run only if the publishing workflow completed successfully
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment:
+      name: production
+      url: ${{ secrets.PRODUCTION_URL || 'https://shortlink-prod.onrender.com' }}
+
+    steps:
+      - name: Trigger Render production deployment
+        shell: bash
+        run: |
+          echo "🚀 Triggering Render production deployment..."
+          if [ -z "${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK }}" ]; then
+            echo "❌ Error: RENDER_PRODUCTION_DEPLOY_HOOK secret is not configured."
+            exit 1
+          fi
+          # Send request to Render deploy hook (ignores output to prevent secret leak)
+          curl -s -X POST "${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK }}" > /dev/null
+          echo "✅ Render production deployment hook triggered successfully."
+
+      - name: Verify Production Deployment Health
+        shell: bash
+        run: |
+          # Use configured PRODUCTION_URL or default fallback
+          PRODUCTION_URL="${{ secrets.PRODUCTION_URL || 'https://shortlink-prod.onrender.com' }}"
+          HEALTH_URL="${PRODUCTION_URL%/}/health"
+          
+          echo "🔍 Verifying production deployment readiness..."
+          echo "   Target endpoint: ${HEALTH_URL}"
+          
+          # Poll the /health endpoint every 10 seconds for up to 2 minutes (12 attempts)
+          for i in {1..12}; do
+            echo "   [Attempt $i/12] Pinging health endpoint..."
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${HEALTH_URL}" || echo "000")
+            
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "✅ Production deployment came up healthy! HTTP status: 200"
+              exit 0
+            fi
+            
+            echo "   ⚠️ Received status: ${HTTP_STATUS}. Waiting 10 seconds before next retry..."
+            sleep 10
+          done
+          
+          echo "❌ Error: Production deployment failed to report healthy status within 2 minutes."
+          exit 1
