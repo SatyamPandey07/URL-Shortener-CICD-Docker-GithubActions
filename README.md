@@ -22,6 +22,21 @@ ShortLink is the foundation for an 8-PR series that builds a production-grade CI
 
 ---
 
+## User Interface Showcase
+
+Here are the user interface screens demonstrating the core functionality:
+
+### 1. Homepage (Empty Input State)
+![Homepage Empty](assets/homepage_empty.png)
+
+### 2. Homepage (Shortened Success State)
+![Homepage Shortened](assets/homepage_shortened.png)
+
+### 3. Friendly 404 Error Page
+![Not Found 404](assets/notfound_404.png)
+
+---
+
 ## Tech Stack
 
 - **Backend**: Python 3.12 + FastAPI + Uvicorn
@@ -327,6 +342,9 @@ pytest -v
 │   ├── env.py
 │   └── versions/
 │       └── 0001_initial_schema.py
+├── docs/
+│   ├── PIPELINE.md          # Walkthrough of the CI/CD pipeline (PR #8)
+│   └── RUNBOOK.md           # Operational runbook & rollback instructions (PR #8)
 ├── templates/
 │   ├── index.html           # Homepage
 │   └── 404.html             # 404 page
@@ -399,8 +417,8 @@ This repository is being built incrementally across 8 pull requests. ShortLink i
 | **#4** ✅ | `feat/image-publishing` | Publish container image to GitHub Container Registry (GHCR) on merge to `develop` |
 | **#5** ✅ | `feat/staging-deploy` | Automated deploy to staging on merge to `develop`; integration smoke tests |
 | **#6** ✅ | `feat/production-deploy` | Deploy to production on merge to `main` with a manual approval gate |
-| **#7 (this PR)** | `feat/security-automation` | Container vulnerability scanning (Trivy), dependency auditing (pip-audit), CodeQL SAST, Dependabot |
-| #8 | `feat/monitoring` | Health-check alerts, uptime monitoring, basic observability |
+| **#7** ✅ | `feat/security-automation` | Container vulnerability scanning (Trivy), dependency auditing (pip-audit), CodeQL SAST, Dependabot |
+| **#8 (this PR)** | `feat/final-polish` | Structured logging middleware, pipeline documentation, runbook, live staging and production URLs |
 
 ---
 

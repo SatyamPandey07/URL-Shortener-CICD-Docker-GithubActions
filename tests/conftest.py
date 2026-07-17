@@ -17,6 +17,7 @@ CI (DATABASE_URL=postgresql://...):
 The DATABASE_URL check happens before any app modules are imported so
 SQLAlchemy picks up the correct engine on first import.
 """
+
 import os
 
 import pytest
