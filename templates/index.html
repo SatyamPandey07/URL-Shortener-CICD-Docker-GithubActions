@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShortLink — URL Shortener</title>
+  <meta name="description" content="ShortLink: a fast, minimal URL shortener. Paste a long URL and get a short, shareable link instantly." />
+  <style>
+    /* ── Design tokens ─────────────────────────────────────────── */
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2d3148;
+      --accent:    #6c63ff;
+      --accent-h:  #8b85ff;
+      --text:      #e4e4f0;
+      --muted:     #888aa0;
+      --error:     #ff6b6b;
+      --success:   #43e97b;
+      --radius:    12px;
+      --shadow:    0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    /* ── Card ──────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    /* ── Header ────────────────────────────────────────────────── */
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.4rem;
+    }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem;
+    }
+    h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px; }
+    .tagline { color: var(--muted); font-size: 0.88rem; margin-bottom: 2rem; }
+
+    /* ── Form ──────────────────────────────────────────────────── */
+    label { display: block; font-size: 0.82rem; font-weight: 600;
+            color: var(--muted); text-transform: uppercase;
+            letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+
+    .input-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    input[type="url"] {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.95rem;
+      padding: 0.7rem 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="url"]:focus { border-color: var(--accent); }
+    input[type="url"]::placeholder { color: var(--muted); }
+
+    button[type="submit"] {
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 0.7rem 1.2rem;
+      transition: background 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+    button[type="submit"]:hover { background: var(--accent-h); }
+    button[type="submit"]:active { transform: scale(0.97); }
+
+    /* ── Error banner ──────────────────────────────────────────── */
+    .error-banner {
+      background: rgba(255, 107, 107, 0.12);
+      border: 1px solid var(--error);
+      border-radius: 8px;
+      color: var(--error);
+      font-size: 0.9rem;
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+    }
+
+    /* ── Result box ────────────────────────────────────────────── */
+    .result {
+      margin-top: 1.5rem;
+      background: rgba(108, 99, 255, 0.08);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 1.2rem;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    .result-label { font-size: 0.78rem; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+    .result-original { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.9rem;
+                        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .short-url-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .short-url {
+      flex: 1;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      text-decoration: none;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .short-url:hover { color: var(--accent-h); text-decoration: underline; }
+
+    #copy-btn {
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.82rem;
+      padding: 0.4rem 0.8rem;
+      transition: background 0.2s, color 0.2s;
+      white-space: nowrap;
+    }
+    #copy-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+    #copy-btn.copied { background: var(--success); border-color: var(--success); color: #000; }
+
+    /* ── Footer ────────────────────────────────────────────────── */
+    footer { margin-top: 2rem; font-size: 0.78rem; color: var(--muted); text-align: center; }
+  </style>
+</head>
+<body>
+  <main class="card" role="main">
+    <div class="logo">
+      <span class="logo-icon">🔗</span>
+      <h1>ShortLink</h1>
+    </div>
+    <p class="tagline">Paste a long URL. Get a short one. Simple.</p>
+
+    <form method="post" action="/shorten" id="shorten-form">
+      <label for="url-input">Long URL</label>
+      <div class="input-row">
+        <input
+          id="url-input"
+          type="url"
+          name="url"
+          placeholder="https://example.com/very/long/url/goes/here"
+          value="{{ original_url or '' }}"
+          required
+          autofocus
+        />
+        <button type="submit" id="shorten-btn">Shorten →</button>
+      </div>
+    </form>
+
+    {% if error %}
+    <div class="error-banner" role="alert" aria-live="polite">
+      ⚠️ {{ error }}
+    </div>
+    {% endif %}
+
+    {% if short_url %}
+    <div class="result" aria-label="Your shortened URL">
+      <div class="result-label">✅ Your short link</div>
+      {% if original_url %}
+      <div class="result-original" title="{{ original_url }}">{{ original_url }}</div>
+      {% endif %}
+      <div class="short-url-row">
+        <a class="short-url" id="short-url-link" href="{{ short_url }}" target="_blank" rel="noopener">
+          {{ short_url }}
+        </a>
+        <button id="copy-btn" type="button" aria-label="Copy short URL to clipboard">Copy</button>
+      </div>
+    </div>
+    {% endif %}
+  </main>
+
+  <footer>ShortLink v0.1 &mdash; PR #1 of 8</footer>
+
+  <script>
+    const copyBtn = document.getElementById('copy-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', async () => {
+        const url = document.getElementById('short-url-link').href;
+        try {
+          await navigator.clipboard.writeText(url);
+          copyBtn.textContent = '✓ Copied!';
+          copyBtn.classList.add('copied');
+          setTimeout(() => {
+            copyBtn.textContent = 'Copy';
+            copyBtn.classList.remove('copied');
+          }, 2000);
+        } catch {
+          copyBtn.textContent = 'Failed';
+        }
+      });
+    }
+  </script>
+</body>
+</html>
