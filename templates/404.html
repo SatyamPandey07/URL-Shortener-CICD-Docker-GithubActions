@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>404 — Link Not Found | ShortLink</title>
+  <meta name="description" content="The short link you followed doesn't exist or has been removed." />
+  <style>
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --border: #2d3148;
+      --accent: #6c63ff; --text: #e4e4f0; --muted: #888aa0;
+      --error: #ff6b6b; --radius: 12px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; display: flex;
+      align-items: center; justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      padding: 2.5rem 2rem; width: 100%; max-width: 440px; text-align: center;
+    }
+    .status-code { font-size: 5rem; font-weight: 900; color: var(--error);
+                   line-height: 1; letter-spacing: -4px; margin-bottom: 0.5rem; }
+    h1 { font-size: 1.3rem; margin-bottom: 0.75rem; }
+    p  { color: var(--muted); font-size: 0.92rem; margin-bottom: 1.5rem; line-height: 1.6; }
+    code {
+      background: rgba(255,107,107,0.1); border: 1px solid var(--error);
+      border-radius: 4px; color: var(--error);
+      font-family: monospace; font-size: 0.9rem; padding: 0.1em 0.4em;
+    }
+    a.home-link {
+      display: inline-block; background: var(--accent);
+      border-radius: 8px; color: #fff; font-weight: 600;
+      padding: 0.7rem 1.5rem; text-decoration: none;
+      transition: background 0.2s;
+    }
+    a.home-link:hover { background: #8b85ff; }
+  </style>
+</head>
+<body>
+  <main class="card" role="main">
+    <div class="status-code">404</div>
+    <h1>Link not found</h1>
+    <p>
+      The short code <code>{{ code }}</code> doesn't exist
+      or may have been removed.
+    </p>
+    <a class="home-link" href="/">← Back to ShortLink</a>
+  </main>
+</body>
+</html>
