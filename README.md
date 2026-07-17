@@ -191,18 +191,34 @@ Once the container image is successfully built and pushed to GHCR on the `develo
 - **Staging URL**: `https://shortlink-staging.onrender.com` (Placeholder - to be finalized)
 - **Workflow Location**: [.github/workflows/deploy-staging.yml](file:///.github/workflows/deploy-staging.yml)
 
-### Deployment Flow
+### Deployment & Promotion Flow
+
+The entire path from code merge to staging, and manually promoted production delivery:
 
 ```mermaid
 graph TD
-    A[Merge PR into develop] --> B[GHA: ci.yml Checks]
-    B -->|Passed| C[GHA: publish-image.yml]
-    C -->|Build & Local Scan Clean| D[Push staging-SHA to GHCR]
-    D -->|workflow_run Completed| E[GHA: deploy-staging.yml]
-    E -->|Trigger| F[Render Service Deploy Hook]
-    F -->|Poll /health every 10s| G{Staging Healthy?}
-    G -->|Yes| H[Deployment Successful]
-    G -->|No after 2 min| I[Deployment Failed]
+    subgraph Staging Pipeline
+        A[Merge PR into develop] --> B[GHA: ci.yml Checks]
+        B -->|Passed| C[GHA: publish-image.yml]
+        C -->|Build & Scan Clean| D[Push staging-SHA to GHCR]
+        D -->|workflow_run Completed| E[GHA: deploy-staging.yml]
+        E -->|Trigger| F[Render Staging Deploy Hook]
+        F -->|Poll /health every 10s| G{Staging Healthy?}
+        G -->|Yes| H[Staging Deployment Successful]
+        G -->|No after 2 min| I[Staging Deployment Failed]
+    end
+
+    subgraph Production Promotion
+        J[Manual Merge develop into main] --> K[GHA: publish-image.yml]
+        K -->|Build & Scan Clean| L[Push prod-SHA & latest to GHCR]
+        L -->|workflow_run Completed| M[GHA: deploy-production.yml]
+        M --> N{GitHub Environment: production Gate}
+        N -->|Manual Reviewer Approved| O[Trigger Render Production Deploy Hook]
+        N -->|Rejected / Timeout| P[Run Aborted]
+        O -->|Poll /health every 10s| Q{Production Healthy?}
+        Q -->|Yes| R[Production Deployment Successful]
+        Q -->|No after 2 min| S[Production Deployment Failed / Alert]
+    end
 ```
 
 ### Health Verification Gate
@@ -213,6 +229,51 @@ Unlike a blind webhook trigger, the deployment pipeline verifies that the stagin
 3. Polls the staging service's `/health` endpoint for up to **2 minutes** (12 attempts, 10s sleep).
 4. If `/health` returns `200 OK`, the workflow marks the staging environment deployment as successful.
 5. If the health check fails or times out, the workflow fails loudly, signaling deployment issues.
+
+---
+
+## Production Deployment
+
+Deployments to the production environment are gated behind automated safety checks and a manual approval step. This ensures that environment promotion is a deliberate, human-reviewed action.
+
+- **Production URL**: `https://shortlink-prod.onrender.com` (Placeholder - to be finalized)
+- **Workflow Location**: [.github/workflows/deploy-production.yml](file:///.github/workflows/deploy-production.yml)
+
+### Manual Approval Gate
+
+The production deployment job uses GitHub Environments to implement approval rules:
+1. When the `Publish Production Image` workflow succeeds on the `main` branch, the `Deploy to Production` workflow is triggered.
+2. The deployment job references `environment: production`.
+3. In the repository settings (`Settings -> Environments -> production`), a **Required Reviewer** is configured.
+4. GitHub automatically pauses the job and sends a notification to the designated reviewer. No steps (including the webhook trigger) will run.
+5. The reviewer reviews the staging verification status, checks the diff, and clicks **Approve** in the Actions UI.
+6. Once approved, the job resumes, triggers the Render production web service via the `RENDER_PRODUCTION_DEPLOY_HOOK` secret, and begins health verification.
+
+### Health Verification Gate
+
+Just like staging, the production pipeline polls the production `/health` endpoint for up to **2 minutes** (12 attempts, 10s intervals) to confirm the new version is healthy and accepting traffic.
+
+---
+
+## Rollback Procedures
+
+If a faulty deploy passes health checks but exhibits regressions in production, you can execute a manual rollback to the previous known-good state. Because our pipeline tags every container image with its unique Git commit SHA, rollbacks are precise, rapid, and do not require code changes or rebuilds.
+
+### Steps to Roll Back (Render Web Service)
+
+1. **Identify the Last Known-Good Commit SHA**:
+   - Look at the git log or GitHub release history to locate the SHA of the previous successful deployment (e.g., `a1b2c3d`).
+2. **Retrieve the Corresponding Image Tag**:
+   - The corresponding production image in GHCR is tagged as `prod-a1b2c3d`.
+3. **Point Render at the Previous Tag**:
+   - Log into the Render Dashboard and navigate to the production web service.
+   - Go to **Settings -> Docker Image URL**.
+   - Change the tag from the failing commit SHA (or `latest`) to `prod-a1b2c3d` (e.g. `ghcr.io/satyampandey07/shortlink:prod-a1b2c3d`).
+   - Click **Save Changes**.
+4. **Trigger Redeployment**:
+   - Click **Manual Deploy -> Clear Cache and Deploy** (or simply **Deploy Latest Commit** if the image URL is updated).
+5. **Verify Health**:
+   - Monitor the Render console logs and request `/health` locally to confirm the service reverted cleanly to the healthy state.
 
 ---
 
@@ -238,7 +299,8 @@ pytest -v
 │   └── workflows/
 │       ├── ci.yml            # GHA CI: lint, test, build (PR #3)
 │       ├── publish-image.yml # GHA CD: build, Trivy scan, push to GHCR (PR #4)
-│       └── deploy-staging.yml # ← GHA CD: trigger Render deploy & poll health (PR #5)
+│       ├── deploy-staging.yml # GHA CD: trigger Render deploy & poll health (PR #5)
+│       └── deploy-production.yml # ← GHA CD: manual approval production deploy (PR #6)
 ├── app/
 │   ├── main.py              # FastAPI app and all routes
 │   ├── models.py            # SQLAlchemy ORM model (Link)
@@ -319,8 +381,8 @@ This repository is being built incrementally across 8 pull requests. ShortLink i
 | **#2** ✅ | `feat/production-docker` | Multi-stage Dockerfile, non-root user, HEALTHCHECK, .dockerignore |
 | **#3** ✅ | `feat/ci-pipeline` | GitHub Actions CI: lint, test, build Docker image on every push |
 | **#4** ✅ | `feat/image-publishing` | Publish container image to GitHub Container Registry (GHCR) on merge to `develop` |
-| **#5 (this PR)** | `feat/staging-deploy` | Automated deploy to staging on merge to `develop`; integration smoke tests |
-| #6 | `feat/production-deploy` | Deploy to production on merge to `main` with a manual approval gate |
+| **#5** ✅ | `feat/staging-deploy` | Automated deploy to staging on merge to `develop`; integration smoke tests |
+| **#6 (this PR)** | `feat/production-deploy` | Deploy to production on merge to `main` with a manual approval gate |
 | #7 | `feat/security-scanning` | Container vulnerability scanning (Trivy), dependency auditing (pip-audit) |
 | #8 | `feat/monitoring` | Health-check alerts, uptime monitoring, basic observability |
 
