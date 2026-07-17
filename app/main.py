@@ -1,4 +1,6 @@
 import os
+import time
+import logging
 from fastapi import FastAPI, Depends, Request, Form, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -9,8 +11,11 @@ from app.database import get_db, engine, Base
 from app import crud, schemas
 
 # ---------------------------------------------------------------------------
-# App initialisation
+# App initialisation & Logging setup
 # ---------------------------------------------------------------------------
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:\t%(message)s")
+logger = logging.getLogger("shortlink")
 
 Base.metadata.create_all(bind=engine)  # creates tables if they don't exist
 
@@ -19,6 +24,18 @@ app = FastAPI(
     description="A minimal URL shortener built with FastAPI.",
     version="0.1.0",
 )
+
+# Structured request logger middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    process_time = (time.perf_counter() - start_time) * 1000
+    logger.info(
+        f"[request] method={request.method} path={request.url.path} "
+        f"status={response.status_code} duration={process_time:.2f}ms"
+    )
+    return response
 
 templates = Jinja2Templates(directory="templates")
 
