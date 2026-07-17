@@ -1,0 +1,76 @@
+# .github/workflows/deploy-staging.yml
+#
+# Automated Staging Deployment — Triggers automatically when a new container
+# image is successfully built, scanned, and pushed to GHCR on the develop branch.
+#
+# Event flow:
+#   1. Commit merged to develop branch.
+#   2. "Publish Production Image" workflow runs, builds/scans/pushes `staging-<sha>`.
+#   3. This workflow runs via `workflow_run` completed trigger.
+#   4. Env trigger checks that conclusion was `success`.
+#   5. Render staging service deploy hook is triggered.
+#   6. Workflow polls staging `/health` endpoint to verify readiness.
+
+name: Deploy to Staging
+
+on:
+  workflow_run:
+    workflows: ["Publish Production Image"]
+    types:
+      - completed
+    branches:
+      - develop
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy and Verify Staging
+    runs-on: ubuntu-latest
+    # Run only if the publishing workflow completed successfully
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment:
+      name: staging
+      url: ${{ secrets.STAGING_URL || 'https://shortlink-staging.onrender.com' }}
+
+    steps:
+      - name: Trigger Render staging deployment
+        shell: bash
+        run: |
+          echo "🚀 Triggering Render staging deployment..."
+          if [ -z "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}" ]; then
+            echo "❌ Error: RENDER_STAGING_DEPLOY_HOOK secret is not configured."
+            exit 1
+          fi
+          # Send request to Render deploy hook (ignores output to prevent secret leak)
+          curl -s -X POST "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}" > /dev/null
+          echo "✅ Render deployment hook triggered successfully."
+
+      - name: Verify Staging Deployment Health
+        shell: bash
+        run: |
+          # Use configured STAGING_URL or default fallback
+          STAGING_URL="${{ secrets.STAGING_URL || 'https://shortlink-staging.onrender.com' }}"
+          HEALTH_URL="${STAGING_URL%/}/health"
+          
+          echo "🔍 Verifying staging deployment readiness..."
+          echo "   Target endpoint: ${HEALTH_URL}"
+          
+          # Poll the /health endpoint every 10 seconds for up to 2 minutes (12 attempts)
+          for i in {1..12}; do
+            echo "   [Attempt $i/12] Pinging health endpoint..."
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${HEALTH_URL}" || echo "000")
+            
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "✅ Staging deployment came up healthy! HTTP status: 200"
+              exit 0
+            fi
+            
+            echo "   ⚠️ Received status: ${HTTP_STATUS}. Waiting 10 seconds before next retry..."
+            sleep 10
+          done
+          
+          echo "❌ Error: Staging deployment failed to report healthy status within 2 minutes."
+          exit 1
