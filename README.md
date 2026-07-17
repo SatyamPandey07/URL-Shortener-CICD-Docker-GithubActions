@@ -1,5 +1,7 @@
 # ShortLink 🔗
 
+[![CI](https://github.com/SatyamPandey07/URL-Shortener-CICD-Docker-GithubActions/actions/workflows/ci.yml/badge.svg)](https://github.com/SatyamPandey07/URL-Shortener-CICD-Docker-GithubActions/actions/workflows/ci.yml)
+
 A minimal, self-hosted URL shortener built with **FastAPI**, **PostgreSQL**, and **Python**.
 
 ShortLink is the foundation for an 8-PR series that builds a production-grade CI/CD pipeline on top of this core app. Each pull request layers in one more piece of the deployment story — Docker production builds, automated testing in CI, container registry publishing, staged deployments, security scanning, and monitoring.
@@ -251,8 +253,8 @@ This repository is being built incrementally across 8 pull requests. ShortLink i
 | PR | Branch | Focus |
 |---|---|---|
 | **#1** ✅ | `feat/core-app` | Core FastAPI app, PostgreSQL, Alembic, pytest, docker-compose |
-| **#2 (this PR)** | `feat/production-docker` | Multi-stage Dockerfile, non-root user, HEALTHCHECK, .dockerignore |
-| #3 | `feat/ci-pipeline` | GitHub Actions CI: lint, test, build Docker image on every push |
+| **#2** ✅ | `feat/production-docker` | Multi-stage Dockerfile, non-root user, HEALTHCHECK, .dockerignore |
+| **#3 (this PR)** | `feat/ci-pipeline` | GitHub Actions CI: lint, test, build Docker image on every push |
 | #4 | `feat/registry-publish` | Publish container image to GitHub Container Registry (GHCR) on merge to `develop` |
 | #5 | `feat/staging-deploy` | Automated deploy to staging on merge to `develop`; integration smoke tests |
 | #6 | `feat/production-deploy` | Deploy to production on merge to `main` with a manual approval gate |
