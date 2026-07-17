@@ -158,6 +158,32 @@ completes in seconds instead of minutes.
 
 ---
 
+## Image Publishing
+
+Continuous Delivery (CD) automatically builds, scans, and publishes the production container image to **GitHub Container Registry (GHCR)** on every push to the `develop` and `main` branches.
+
+- **Registry Location**: [ghcr.io/satyampandey07/shortlink](https://github.com/SatyamPandey07/URL-Shortener-CICD-Docker-GithubActions/pkgs/container/shortlink)
+- **Workflow Location**: [.github/workflows/publish-image.yml](file:///.github/workflows/publish-image.yml)
+
+### Tagging Strategy
+
+Every build is tagged with the **Git short SHA** (7-character commit hash) to ensure 100% traceability from running containers back to code changes. Additional branch-specific tags are applied automatically:
+
+| Target Branch | Tags Applied | Purpose |
+|---|---|---|
+| `develop` | `staging-<short-sha>`, `<short-sha>` | Deployed automatically to the staging environment |
+| `main` | `prod-<short-sha>`, `latest`, `<short-sha>` | Deployed to production |
+
+### Vulnerability Gate (Trivy Scan)
+
+To prevent security regressions, the publishing pipeline runs **Trivy** to scan the image's OS and language libraries before pushing:
+1. The image is built and loaded into the local Docker runner.
+2. Trivy scans the image for **CRITICAL** vulnerabilities.
+3. If any critical vulnerabilities are found, the workflow **fails immediately** and halts the push, keeping insecure images completely out of the registry.
+4. If the scan is clean, the image is pushed with all tags.
+
+---
+
 ## Running Tests
 
 Tests use SQLite in-memory — **no PostgreSQL required**.
@@ -176,6 +202,10 @@ pytest -v
 
 ```
 .
+├── .github/
+│   └── workflows/
+│       ├── ci.yml            # GHA CI: lint, test, build (PR #3)
+│       └── publish-image.yml # ← GHA CD: build, Trivy scan, push to GHCR (PR #4)
 ├── app/
 │   ├── main.py              # FastAPI app and all routes
 │   ├── models.py            # SQLAlchemy ORM model (Link)
@@ -254,8 +284,8 @@ This repository is being built incrementally across 8 pull requests. ShortLink i
 |---|---|---|
 | **#1** ✅ | `feat/core-app` | Core FastAPI app, PostgreSQL, Alembic, pytest, docker-compose |
 | **#2** ✅ | `feat/production-docker` | Multi-stage Dockerfile, non-root user, HEALTHCHECK, .dockerignore |
-| **#3 (this PR)** | `feat/ci-pipeline` | GitHub Actions CI: lint, test, build Docker image on every push |
-| #4 | `feat/registry-publish` | Publish container image to GitHub Container Registry (GHCR) on merge to `develop` |
+| **#3** ✅ | `feat/ci-pipeline` | GitHub Actions CI: lint, test, build Docker image on every push |
+| **#4 (this PR)** | `feat/image-publishing` | Publish container image to GitHub Container Registry (GHCR) on merge to `develop` |
 | #5 | `feat/staging-deploy` | Automated deploy to staging on merge to `develop`; integration smoke tests |
 | #6 | `feat/production-deploy` | Deploy to production on merge to `main` with a manual approval gate |
 | #7 | `feat/security-scanning` | Container vulnerability scanning (Trivy), dependency auditing (pip-audit) |
