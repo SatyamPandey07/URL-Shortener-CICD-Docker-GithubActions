@@ -184,6 +184,38 @@ To prevent security regressions, the publishing pipeline runs **Trivy** to scan 
 
 ---
 
+## Staging Deployment
+
+Once the container image is successfully built and pushed to GHCR on the `develop` branch, the pipeline automatically triggers a deployment to the staging environment hosted on Render.
+
+- **Staging URL**: `https://shortlink-staging.onrender.com` (Placeholder - to be finalized)
+- **Workflow Location**: [.github/workflows/deploy-staging.yml](file:///.github/workflows/deploy-staging.yml)
+
+### Deployment Flow
+
+```mermaid
+graph TD
+    A[Merge PR into develop] --> B[GHA: ci.yml Checks]
+    B -->|Passed| C[GHA: publish-image.yml]
+    C -->|Build & Local Scan Clean| D[Push staging-SHA to GHCR]
+    D -->|workflow_run Completed| E[GHA: deploy-staging.yml]
+    E -->|Trigger| F[Render Service Deploy Hook]
+    F -->|Poll /health every 10s| G{Staging Healthy?}
+    G -->|Yes| H[Deployment Successful]
+    G -->|No after 2 min| I[Deployment Failed]
+```
+
+### Health Verification Gate
+
+Unlike a blind webhook trigger, the deployment pipeline verifies that the staging application is online:
+1. Calls the Render deploy hook using the `RENDER_STAGING_DEPLOY_HOOK` secret.
+2. Registers a **Staging Environment** deployment in GitHub (visible in the repository's deployments history UI).
+3. Polls the staging service's `/health` endpoint for up to **2 minutes** (12 attempts, 10s sleep).
+4. If `/health` returns `200 OK`, the workflow marks the staging environment deployment as successful.
+5. If the health check fails or times out, the workflow fails loudly, signaling deployment issues.
+
+---
+
 ## Running Tests
 
 Tests use SQLite in-memory — **no PostgreSQL required**.
@@ -205,7 +237,8 @@ pytest -v
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml            # GHA CI: lint, test, build (PR #3)
-│       └── publish-image.yml # ← GHA CD: build, Trivy scan, push to GHCR (PR #4)
+│       ├── publish-image.yml # GHA CD: build, Trivy scan, push to GHCR (PR #4)
+│       └── deploy-staging.yml # ← GHA CD: trigger Render deploy & poll health (PR #5)
 ├── app/
 │   ├── main.py              # FastAPI app and all routes
 │   ├── models.py            # SQLAlchemy ORM model (Link)
@@ -285,8 +318,8 @@ This repository is being built incrementally across 8 pull requests. ShortLink i
 | **#1** ✅ | `feat/core-app` | Core FastAPI app, PostgreSQL, Alembic, pytest, docker-compose |
 | **#2** ✅ | `feat/production-docker` | Multi-stage Dockerfile, non-root user, HEALTHCHECK, .dockerignore |
 | **#3** ✅ | `feat/ci-pipeline` | GitHub Actions CI: lint, test, build Docker image on every push |
-| **#4 (this PR)** | `feat/image-publishing` | Publish container image to GitHub Container Registry (GHCR) on merge to `develop` |
-| #5 | `feat/staging-deploy` | Automated deploy to staging on merge to `develop`; integration smoke tests |
+| **#4** ✅ | `feat/image-publishing` | Publish container image to GitHub Container Registry (GHCR) on merge to `develop` |
+| **#5 (this PR)** | `feat/staging-deploy` | Automated deploy to staging on merge to `develop`; integration smoke tests |
 | #6 | `feat/production-deploy` | Deploy to production on merge to `main` with a manual approval gate |
 | #7 | `feat/security-scanning` | Container vulnerability scanning (Trivy), dependency auditing (pip-audit) |
 | #8 | `feat/monitoring` | Health-check alerts, uptime monitoring, basic observability |
