@@ -327,6 +327,9 @@ pytest -v
 │   ├── env.py
 │   └── versions/
 │       └── 0001_initial_schema.py
+├── docs/
+│   ├── PIPELINE.md          # Walkthrough of the CI/CD pipeline (PR #8)
+│   └── RUNBOOK.md           # Operational runbook & rollback instructions (PR #8)
 ├── templates/
 │   ├── index.html           # Homepage
 │   └── 404.html             # 404 page
@@ -399,8 +402,8 @@ This repository is being built incrementally across 8 pull requests. ShortLink i
 | **#4** ✅ | `feat/image-publishing` | Publish container image to GitHub Container Registry (GHCR) on merge to `develop` |
 | **#5** ✅ | `feat/staging-deploy` | Automated deploy to staging on merge to `develop`; integration smoke tests |
 | **#6** ✅ | `feat/production-deploy` | Deploy to production on merge to `main` with a manual approval gate |
-| **#7 (this PR)** | `feat/security-automation` | Container vulnerability scanning (Trivy), dependency auditing (pip-audit), CodeQL SAST, Dependabot |
-| #8 | `feat/monitoring` | Health-check alerts, uptime monitoring, basic observability |
+| **#7** ✅ | `feat/security-automation` | Container vulnerability scanning (Trivy), dependency auditing (pip-audit), CodeQL SAST, Dependabot |
+| **#8 (this PR)** | `feat/final-polish` | Structured logging middleware, pipeline documentation, runbook, live staging and production URLs |
 
 ---
 
