@@ -1,0 +1,52 @@
+# =============================================================================
+# .dockerignore — keeps the build context lean and secrets out of images
+# =============================================================================
+
+# Git
+.git
+.gitignore
+
+# Python virtual environments (large, not needed in image)
+.venv
+venv
+env
+__pycache__
+*.py[cod]
+*.pyo
+*.egg-info
+*.egg
+.eggs
+dist
+build
+
+# Test artefacts (not needed at runtime)
+.pytest_cache
+htmlcov
+.coverage
+coverage.xml
+tests/
+test.db
+
+# Local environment files (never bake secrets into images!)
+.env
+.env.local
+*.env
+
+# IDE / editor files
+.idea
+.vscode
+*.swp
+*.swo
+.DS_Store
+
+# Docker files (meta — no need to include docker files in the image itself)
+docker-compose*.yml
+.dockerignore
+
+# Docs and local scripts
+*.md
+*.txt
+!requirements.txt
+
+# Logs
+*.log
