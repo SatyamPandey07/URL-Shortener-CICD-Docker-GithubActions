@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  # ─── PostgreSQL database ────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: shortlink_db
+    environment:
+      POSTGRES_USER: shortlink
+      POSTGRES_PASSWORD: shortlink
+      POSTGRES_DB: shortlink
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shortlink -d shortlink"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── FastAPI application ────────────────────────────────────────
+  app:
+    build: .
+    container_name: shortlink_app
+    # Run migrations then start the server
+    command: >
+      sh -c "
+        echo 'Waiting for DB...' &&
+        until pg_isready -h db -U shortlink; do sleep 1; done &&
+        echo 'Running migrations...' &&
+        alembic upgrade head &&
+        echo 'Starting server...' &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+    environment:
+      DATABASE_URL: postgresql://shortlink:shortlink@db:5432/shortlink
+      APP_BASE_URL: http://localhost:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source for hot-reload during development
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
