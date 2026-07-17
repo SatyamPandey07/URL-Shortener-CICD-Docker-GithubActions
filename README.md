@@ -30,7 +30,13 @@ ShortLink is the foundation for an 8-PR series that builds a production-grade CI
 
 ---
 
-## Quick Start (Docker — recommended)
+---
+
+## Quick Start — Local Development (Docker Compose)
+
+> **This is the dev-only setup.** Hot-reload is on, the source directory is
+> volume-mounted, and the app runs as root. For production use, see the
+> [Production Build](#production-build) section below.
 
 **Prerequisites**: Docker and Docker Compose installed.
 
@@ -80,6 +86,76 @@ Open [http://localhost:8000](http://localhost:8000) in your browser.
 
 ---
 
+## Production Build
+
+The production `Dockerfile` uses a **multi-stage build** to produce a minimal,
+hardened image. This is what gets published to the container registry and
+deployed to staging and production in later PRs.
+
+### Why multi-stage?
+
+| Concern | How the production Dockerfile handles it |
+|---|---|
+| **Image size** | `builder` stage compiles deps with gcc; `runtime` stage copies only the installed packages — no compiler, no pip, no build tools in the final image |
+| **Attack surface** | Fewer packages = fewer CVE exposure points; `libpq5` runtime lib only, no `libpq-dev` |
+| **Non-root user** | App runs as `appuser` (UID 1001) — root compromise inside the container cannot escalate to host root |
+| **Secret hygiene** | `.dockerignore` excludes `.env` and all `*.env` files so secrets never bake into an image layer |
+| **Health probes** | `HEALTHCHECK` polls `GET /health` every 30s; orchestrators (Docker Swarm, Kubernetes, Render) use this to decide if a container is ready |
+| **Config from env** | `DATABASE_URL`, `PORT`, `APP_BASE_URL`, `WORKERS` all come from env — the same image runs in local, staging, and production with different configs |
+
+### Build and run the production image
+
+```bash
+# Build the image (tagged for local testing)
+docker build -t shortlink:prod .
+
+# Inspect the final image size
+docker image inspect shortlink:prod --format '{{.Size}}' | numfmt --to=iec
+
+# Run against a local Postgres (adjust DATABASE_URL for your setup)
+docker network create shortlink-net
+
+docker run -d \
+  --name shortlink-db \
+  --network shortlink-net \
+  -e POSTGRES_USER=shortlink \
+  -e POSTGRES_PASSWORD=shortlink \
+  -e POSTGRES_DB=shortlink \
+  postgres:16-alpine
+
+docker run -d \
+  --name shortlink-prod \
+  --network shortlink-net \
+  -p 8000:8000 \
+  -e DATABASE_URL=postgresql://shortlink:shortlink@shortlink-db:5432/shortlink \
+  -e APP_BASE_URL=http://localhost:8000 \
+  shortlink:prod
+
+# Verify it is healthy
+docker ps                              # check STATUS column shows (healthy)
+curl http://localhost:8000/health      # {"status": "ok"}
+curl http://localhost:8000/            # homepage HTML
+
+# Clean up
+docker rm -f shortlink-prod shortlink-db
+docker network rm shortlink-net
+```
+
+### Verify non-root execution
+
+```bash
+docker run --rm shortlink:prod whoami   # appuser
+```
+
+### Image layers
+
+The `Dockerfile` is structured so that the **dependency layer is cached**
+independently of the application source. Rebuilding after a pure code change
+(no `requirements.txt` change) re-uses the cached dependency layer and
+completes in seconds instead of minutes.
+
+---
+
 ## Running Tests
 
 Tests use SQLite in-memory — **no PostgreSQL required**.
@@ -99,24 +175,26 @@ pytest -v
 ```
 .
 ├── app/
-│   ├── main.py         # FastAPI app and all routes
-│   ├── models.py       # SQLAlchemy ORM model (Link)
-│   ├── database.py     # Engine, session factory, Base
-│   ├── schemas.py      # Pydantic request/response models
-│   ├── crud.py         # Database helper functions
-│   └── shortener.py    # Base-62 code generator
+│   ├── main.py              # FastAPI app and all routes
+│   ├── models.py            # SQLAlchemy ORM model (Link)
+│   ├── database.py          # Engine, session factory, Base
+│   ├── schemas.py           # Pydantic request/response models
+│   ├── crud.py              # Database helper functions
+│   └── shortener.py         # Base-62 code generator
 ├── alembic/
 │   ├── env.py
 │   └── versions/
 │       └── 0001_initial_schema.py
 ├── templates/
-│   ├── index.html      # Homepage
-│   └── 404.html        # 404 page
+│   ├── index.html           # Homepage
+│   └── 404.html             # 404 page
 ├── tests/
-│   ├── conftest.py     # Fixtures and SQLite override
-│   └── test_api.py     # API endpoint tests
-├── Dockerfile
-├── docker-compose.yml
+│   ├── conftest.py          # Fixtures and SQLite override
+│   └── test_api.py          # API endpoint tests
+├── Dockerfile               # ← Multi-stage production image (PR #2)
+├── docker-entrypoint.sh     # ← Runs migrations then starts uvicorn (PR #2)
+├── docker-compose.yml       # Local dev only (hot-reload, volume mount)
+├── .dockerignore            # ← Keeps secrets and junk out of images (PR #2)
 ├── requirements.txt
 ├── alembic.ini
 └── .env.example
@@ -172,8 +250,8 @@ This repository is being built incrementally across 8 pull requests. ShortLink i
 
 | PR | Branch | Focus |
 |---|---|---|
-| **#1 (this PR)** | `feat/core-app` | Core FastAPI app, PostgreSQL, Alembic, pytest, docker-compose |
-| #2 | `feat/dockerfile-prod` | Production-hardened multi-stage Dockerfile (non-root user, minimal image) |
+| **#1** ✅ | `feat/core-app` | Core FastAPI app, PostgreSQL, Alembic, pytest, docker-compose |
+| **#2 (this PR)** | `feat/production-docker` | Multi-stage Dockerfile, non-root user, HEALTHCHECK, .dockerignore |
 | #3 | `feat/ci-pipeline` | GitHub Actions CI: lint, test, build Docker image on every push |
 | #4 | `feat/registry-publish` | Publish container image to GitHub Container Registry (GHCR) on merge to `develop` |
 | #5 | `feat/staging-deploy` | Automated deploy to staging on merge to `develop`; integration smoke tests |
