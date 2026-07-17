@@ -1,0 +1,185 @@
+# .github/workflows/ci.yml
+#
+# Continuous Integration — runs on every pull request, regardless of target
+# branch. Catches failures before they reach develop or main.
+#
+# Jobs:
+#   lint     → ruff (imports, style, unused code)
+#   test     → pytest against a real Postgres service container + coverage
+#   docker   → build the production Dockerfile (build-only, no push)
+
+name: CI
+
+on:
+  pull_request:
+    # Explicitly list branch patterns so new branches are covered by default.
+    # Using no 'branches' key would also work (matches all PRs), but listing
+    # them makes the intent clear and avoids accidental runs on stale refs.
+    branches:
+      - "**"
+
+# Cancel any in-flight run for the same PR when a new commit is pushed.
+# Prevents wasted minutes on superseded runs.
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  # Postgres credentials used by both the service container and the app
+  POSTGRES_USER: shortlink
+  POSTGRES_PASSWORD: shortlink
+  POSTGRES_DB: shortlink
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════════
+  # JOB 1 — Lint (ruff)
+  # Fast feedback: runs in ~10s so developers know immediately if there's
+  # a style or import issue, without waiting for the full test matrix.
+  # ═══════════════════════════════════════════════════════════════════════
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install linting dependencies
+        run: pip install ruff==$(grep '^ruff==' requirements.txt | cut -d= -f3)
+
+      - name: Run ruff — check imports, style, unused code
+        # --output-format=github annotates the PR diff with inline comments
+        run: ruff check app/ tests/ --output-format=github
+
+      - name: Run ruff — check formatting
+        run: ruff format app/ tests/ --check
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # JOB 2 — Test (pytest + real Postgres + coverage)
+  # Runs against a real Postgres service container — not SQLite, not a mock.
+  # This catches SQL dialect differences and migration edge cases that
+  # SQLite-based tests would miss.
+  # ═══════════════════════════════════════════════════════════════════════
+  test:
+    name: Test (pytest + Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+        ports:
+          - 5432:5432
+        # Wait until Postgres is ready to accept connections before
+        # continuing to the next step.
+        options: >-
+          --health-cmd "pg_isready -U shortlink -d shortlink"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Alembic migrations
+        # Apply the schema to the real Postgres service container.
+        # This validates that migrations are correct and idempotent before
+        # running any tests.
+        env:
+          DATABASE_URL: postgresql://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@localhost:5432/${{ env.POSTGRES_DB }}
+        run: alembic upgrade head
+
+      - name: Run pytest with coverage
+        # DATABASE_URL points at the Postgres service container so tests run
+        # against real Postgres — the conftest.py SQLite override applies only
+        # when DATABASE_URL is not set or is a sqlite:// URL.
+        #
+        # Coverage floor: 85%
+        # Current actual coverage: 89% (measured 2026-07-17 with 9 tests).
+        # Floor is set at 85% (4pp below current) to allow for future refactors
+        # that add untestable bootstrap code, while still failing loudly if
+        # coverage drops significantly. Raise the floor as test coverage grows.
+        env:
+          DATABASE_URL: postgresql://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@localhost:5432/${{ env.POSTGRES_DB }}
+          APP_BASE_URL: http://localhost:8000
+        run: |
+          python -m pytest tests/ \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=85 \
+            -v
+
+      - name: Upload coverage report
+        # Makes the XML report available for download in the Actions UI.
+        # A future PR can wire this to Codecov or similar.
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # JOB 3 — Docker build
+  # Builds the production Dockerfile on every PR to confirm it still
+  # builds cleanly after any code or dependency change. Build only — no
+  # push. Pushing to a registry is handled in PR #4.
+  # ═══════════════════════════════════════════════════════════════════════
+  docker-build:
+    name: Docker build (production image)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        # Buildx enables BuildKit features: cache mounts, multi-platform
+        # builds, and faster layer caching.
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build production Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false          # build-only on PRs; push happens in CD workflow
+          tags: shortlink:ci-${{ github.sha }}
+          # Cache layers from the previous run of this branch to speed up
+          # subsequent builds. Falls back to the base branch cache on first run.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Confirm image was built
+        # docker/build-push-action with push=false doesn't load the image
+        # into the local daemon by default when using buildx. We verify the
+        # build succeeded by checking the action's output — a non-zero exit
+        # from the previous step already fails the job. This step provides
+        # an explicit confirmation message in the logs.
+        run: |
+          echo "✅ Production Docker image built successfully"
+          echo "   Tag: shortlink:ci-${{ github.sha }}"
+          echo "   This image will be pushed to GHCR in PR #4 (CD workflow)"

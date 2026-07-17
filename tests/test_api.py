@@ -8,7 +8,6 @@ Covers:
   - POST /shorten: malformed URL (no scheme) → 422
   - GET /health:  returns {"status": "ok"}
 """
-import pytest
 
 
 # ── Health check ─────────────────────────────────────────────────────────────
