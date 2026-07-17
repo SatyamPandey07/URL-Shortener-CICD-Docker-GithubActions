@@ -1,0 +1,118 @@
+# .github/workflows/publish-image.yml
+#
+# CD Workflow — Automated container image publishing to GitHub Container Registry (GHCR).
+# Triggered on direct push (or merge) to develop and main.
+#
+# Security Gate:
+#   Runs Trivy scan on the built image. If any CRITICAL vulnerabilities are
+#   found, the workflow fails immediately and blocks the image from being published.
+
+name: Publish Production Image
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+
+concurrency:
+  group: cd-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  # Image name: ghcr.io/<owner>/shortlink (must be lowercased)
+  IMAGE_NAME: shortlink
+
+jobs:
+  publish:
+    name: Build, Scan, and Publish Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate git variables
+        id: vars
+        shell: bash
+        run: |
+          # Get short 7-character Git commit SHA
+          echo "sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+          # Convert repository owner to lowercase for GHCR
+          OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "owner_lower=${OWNER_LOWER}" >> $GITHUB_OUTPUT
+
+      - name: Determine tags
+        id: tags
+        shell: bash
+        run: |
+          SHA="${{ steps.vars.outputs.sha }}"
+          OWNER="${{ steps.vars.outputs.owner_lower }}"
+          BASE_REF="ghcr.io/${OWNER}/${{ env.IMAGE_NAME }}"
+          
+          # We always tag with the git short SHA
+          TAGS="${BASE_REF}:${SHA}"
+          
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            # Production: tag with prod-<sha> and latest
+            TAGS="${TAGS},${BASE_REF}:prod-${SHA},${BASE_REF}:latest"
+          else
+            # Staging (develop): tag with staging-<sha>
+            TAGS="${TAGS},${BASE_REF}:staging-${SHA}"
+          fi
+          
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          # Set a single primary tag for Trivy scanner to target locally
+          echo "primary_tag=${BASE_REF}:${SHA}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Build & Load locally ───────────────────────────────────────────────
+      # We first build the image and load it into the local Docker daemon
+      # so that Trivy can run a local scan on the actual image.
+      - name: Build and load image locally
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ steps.tags.outputs.primary_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Trivy Vulnerability Scan ───────────────────────────────────────────
+      # Runs vulnerability scanning before pushing to registry.
+      # Fails if any CRITICAL vulnerabilities are found in OS or packages.
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.tags.outputs.primary_tag }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL'
+
+      # ── Build & Push to GHCR ───────────────────────────────────────────────
+      # This step only executes if Trivy scan succeeds.
+      # Re-uses local build cache built in the previous step and pushes all
+      # calculated tags to GHCR.
+      - name: Build and push image to GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
