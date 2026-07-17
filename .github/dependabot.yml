@@ -1,0 +1,29 @@
+# .github/dependabot.yml
+#
+# Dependabot Configuration — Enables weekly automated dependency auditing.
+# Dependabot scans python requirements and GitHub Actions versions,
+# automatically opening Pull Requests on develop if outdated or vulnerable.
+
+version: 2
+updates:
+  # ── Python Dependencies ───────────────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "UTC"
+    target-branch: "develop"
+    open-pull-requests-limit: 5
+
+  # ── GitHub Actions Dependencies ───────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    target-branch: "develop"
+    open-pull-requests-limit: 5
