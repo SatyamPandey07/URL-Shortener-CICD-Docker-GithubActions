@@ -277,6 +277,19 @@ If a faulty deploy passes health checks but exhibits regressions in production, 
 
 ---
 
+## Security Posture
+
+We implement a defense-in-depth security model to ensure the software remains secure at rest, in transit, and during the deploy phase:
+
+1. **Dependency Scanning (Dependabot)**: Automatically checks for Python library updates and GitHub Action deprecations weekly, raising PRs against the `develop` branch to remediate stale or vulnerable libraries.
+2. **Container Image Scanning (Trivy)**: Scans compiled container images during the CD stage before registry publishing. Blocks pushed images immediately if any `CRITICAL` vulnerability is detected.
+3. **Static Application Security Testing (CodeQL)**: Scans source code natively on GitHub for code smells, injections, and vulnerabilities on PRs and weekly scheduled scans.
+4. **Environment Gate (Required Reviewers)**: Production deployment requires an explicit manual sign-off by a designated maintainer, protecting the production site from unintentional promotions.
+
+For detailed instructions on private reporting of vulnerabilities, refer to [SECURITY.md](file:///SECURITY.md).
+
+---
+
 ## Running Tests
 
 Tests use SQLite in-memory — **no PostgreSQL required**.
@@ -296,11 +309,13 @@ pytest -v
 ```
 .
 ├── .github/
-│   └── workflows/
-│       ├── ci.yml            # GHA CI: lint, test, build (PR #3)
-│       ├── publish-image.yml # GHA CD: build, Trivy scan, push to GHCR (PR #4)
-│       ├── deploy-staging.yml # GHA CD: trigger Render deploy & poll health (PR #5)
-│       └── deploy-production.yml # ← GHA CD: manual approval production deploy (PR #6)
+│   ├── workflows/
+│   │   ├── ci.yml            # GHA CI: lint, test, build (PR #3)
+│   │   ├── publish-image.yml # GHA CD: build, Trivy scan, push to GHCR (PR #4)
+│   │   ├── deploy-staging.yml # GHA CD: trigger Render deploy & poll health (PR #5)
+│   │   ├── deploy-production.yml # GHA CD: manual approval production deploy (PR #6)
+│   │   └── codeql.yml        # ← GHA Security: CodeQL static analysis (PR #7)
+│   └── dependabot.yml        # ← Dependency update scheduler (PR #7)
 ├── app/
 │   ├── main.py              # FastAPI app and all routes
 │   ├── models.py            # SQLAlchemy ORM model (Link)
@@ -324,6 +339,7 @@ pytest -v
 ├── .dockerignore            # ← Keeps secrets and junk out of images (PR #2)
 ├── requirements.txt
 ├── alembic.ini
+├── SECURITY.md              # ← Security Policy & Reporting Guide (PR #7)
 └── .env.example
 ```
 
@@ -382,8 +398,8 @@ This repository is being built incrementally across 8 pull requests. ShortLink i
 | **#3** ✅ | `feat/ci-pipeline` | GitHub Actions CI: lint, test, build Docker image on every push |
 | **#4** ✅ | `feat/image-publishing` | Publish container image to GitHub Container Registry (GHCR) on merge to `develop` |
 | **#5** ✅ | `feat/staging-deploy` | Automated deploy to staging on merge to `develop`; integration smoke tests |
-| **#6 (this PR)** | `feat/production-deploy` | Deploy to production on merge to `main` with a manual approval gate |
-| #7 | `feat/security-scanning` | Container vulnerability scanning (Trivy), dependency auditing (pip-audit) |
+| **#6** ✅ | `feat/production-deploy` | Deploy to production on merge to `main` with a manual approval gate |
+| **#7 (this PR)** | `feat/security-automation` | Container vulnerability scanning (Trivy), dependency auditing (pip-audit), CodeQL SAST, Dependabot |
 | #8 | `feat/monitoring` | Health-check alerts, uptime monitoring, basic observability |
 
 ---
